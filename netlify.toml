@@ -1,8 +1,3 @@
 [build]
 command = "npm run build"
 publish = "dist/client"
-
-[functions]
-directory = "dist/server"
-node_bundler = "esbuild"
-
