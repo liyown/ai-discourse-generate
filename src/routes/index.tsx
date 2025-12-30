@@ -5,27 +5,23 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useState } from 'react'
+import * as XLSX from 'xlsx'
+import { PanelLeft, Bot, Sparkles, FileDown } from 'lucide-react'
 
 export const Route = createFileRoute('/')({ component: App })
 
 // The core combinatorial logic
 function combineNodes(nodeVariations: string[][]): string[] {
-  if (!nodeVariations || nodeVariations.length === 0) {
-    return []
-  }
-
+  if (!nodeVariations || nodeVariations.length === 0) return []
   return nodeVariations.reduce(
     (acc, currentVariations) => {
       if (currentVariations.length === 0) return acc
-      if (acc.length === 0) return currentVariations.map((v) => v) // Initialize with first node's variations
-
-      const newCombinations: string[] = []
-      acc.forEach((accVariation) => {
-        currentVariations.forEach((currentVariation) => {
-          newCombinations.push(`${accVariation}\n${currentVariation}`)
-        })
-      })
-      return newCombinations
+      if (acc.length === 0) return currentVariations
+      return acc.flatMap((accVariation) =>
+        currentVariations.map(
+          (currentVariation) => `${accVariation}\n${currentVariation}`,
+        ),
+      )
     },
     [] as string[],
   )
@@ -45,175 +41,162 @@ function App() {
   const handleGenerate = async () => {
     setIsLoading(true)
     setResults([])
-
     const nodes = referenceText.split('\n').filter((line) => line.trim() !== '')
     if (nodes.length === 0) {
       setIsLoading(false)
       return
     }
-
-    // --- AI Generation Simulation ---
-    // In a real app, this section would make API calls for each node.
-    // Here, we simulate the delay and the results.
-    await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate network delay
-
-    const rewrittenNodes: string[][] = nodes.map((node) => {
-      const variations: string[] = []
-      for (let i = 1; i <= generationCount; i++) {
-        variations.push(`(${rewritePrompt}) -> "${node}" 的模拟改写 #${i}`)
-      }
-      return variations
-    })
-    // --- End Simulation ---
-
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const rewrittenNodes: string[][] = nodes.map((node) =>
+      Array.from(
+        { length: generationCount },
+        (_, i) => `(${rewritePrompt}) -> "${node}" 的模拟改写 #${i + 1}`,
+      ),
+    )
     const finalCombinations = combineNodes(rewrittenNodes)
     setResults(finalCombinations)
     setIsLoading(false)
   }
 
-  return (
-    <div className="bg-gray-50/50 min-h-screen">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <header className="text-center mb-12">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-            智能话术生成引擎
-          </h1>
-          <p className="mt-4 text-lg text-gray-500">
-            通过 AI 批量改写和组合，快速生成多样化、高质量的营销话术。
-          </p>
-        </header>
+  const handleExport = () => {
+    if (results.length === 0) return
+    const dataToExport = results.map((result, index) => ({
+      ID: index + 1,
+      话术: result,
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport)
+    worksheet['!cols'] = [{ wch: 5 }, { wch: 80 }]
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, '生成的话术')
+    XLSX.writeFile(workbook, '话术生成结果.xlsx')
+  }
 
-        <main className="space-y-8">
-          {/* Step 1: Input */}
-          <Card className="shadow-sm">
+  return (
+    <div className="bg-slate-50 min-h-screen">
+      <div className="grid grid-cols-1 lg:grid-cols-2 h-screen">
+        {/* Left Column: Controls */}
+        <div className="flex flex-col p-4">
+          <Card className="shadow-lg flex-grow flex flex-col">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="bg-gray-800 text-white w-6 h-6 flex items-center justify-center rounded-full text-sm">
-                  1
-                </span>
-                输入参考话术和改写要求
+              <CardTitle className="flex items-center gap-3 text-slate-800">
+                <PanelLeft className="h-6 w-6" />
+                <span className="text-xl">控制面板</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid w-full gap-2">
-                <Label htmlFor="reference-text">
-                  参考话术 (每行一条，代表一个节点)
+            <CardContent className="flex-grow flex flex-col gap-6">
+              <div className="grid w-full gap-2 flex-grow">
+                <Label htmlFor="reference-text" className="font-semibold">
+                  参考话术 (每行一条)
                 </Label>
                 <Textarea
-                  placeholder="例如：
-你好，我是[你的名字]。
-我们最近有一个很棒的活动。
-感兴趣可以点击下面的链接了解详情。"
+                  placeholder="在此输入你的参考话术..."
                   id="reference-text"
-                  className="min-h-[150px] font-mono text-sm"
+                  className="flex-grow text-base font-mono bg-slate-100"
                   value={referenceText}
                   onChange={(e) => setReferenceText(e.target.value)}
                 />
               </div>
               <div className="grid w-full gap-2">
-                <Label htmlFor="rewrite-prompt">AI 改写要求</Label>
+                <Label htmlFor="rewrite-prompt" className="font-semibold">
+                  AI 改写要求
+                </Label>
                 <Textarea
-                  placeholder="例如：请用更热情、更口语化的方式改写，突出活动的吸引力。"
+                  placeholder="例如：请用更热情、更口语化的方式改写..."
                   id="rewrite-prompt"
-                  className="min-h-[80px]"
+                  className="min-h-[60px] text-base bg-slate-100"
                   value={rewritePrompt}
                   onChange={(e) => setRewritePrompt(e.target.value)}
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Step 2: Generate */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="bg-gray-800 text-white w-6 h-6 flex items-center justify-center rounded-full text-sm">
-                  2
-                </span>
-                设置并生成
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row items-center gap-6">
-              <div className="grid w-full sm:w-1/3 gap-2">
-                <Label htmlFor="generation-count">生成数量 (每个节点)</Label>
-                <Input
-                  id="generation-count"
-                  type="number"
-                  placeholder="例如: 3"
-                  value={generationCount}
-                  onChange={(e) =>
-                    setGenerationCount(Math.max(1, parseInt(e.target.value, 10)))
-                  }
-                />
-              </div>
-              <div className="flex-1 w-full sm:w-auto mt-4 sm:mt-0">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
+                <div className="grid w-full sm:w-auto gap-2">
+                  <Label htmlFor="generation-count" className="font-semibold">
+                    生成数量
+                  </Label>
+                  <Input
+                    id="generation-count"
+                    type="number"
+                    placeholder="例如: 3"
+                    className="bg-slate-100 w-full sm:w-32"
+                    value={generationCount}
+                    onChange={(e) =>
+                      setGenerationCount(Math.max(1, parseInt(e.target.value, 10)))
+                    }
+                  />
+                </div>
                 <Button
                   size="lg"
-                  className="w-full"
+                  className="w-full sm:w-auto text-base font-bold"
                   onClick={handleGenerate}
                   disabled={isLoading}
                 >
-                  {isLoading ? '正在生成中...' : '开始智能生成'}
+                  {isLoading ? (
+                    <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
+                  )}
+                  {isLoading ? '正在生成...' : '开始智能生成'}
                 </Button>
               </div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Step 3: Results */}
-          <Card className="shadow-sm">
+        {/* Right Column: Results */}
+        <div className="flex flex-col p-4">
+          <Card className="shadow-lg flex-grow flex flex-col">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="bg-gray-800 text-white w-6 h-6 flex items-center justify-center rounded-full text-sm">
-                    3
-                  </span>
-                  生成结果
+              <CardTitle className="flex items-center justify-between text-slate-800">
+                <div className="flex items-center gap-3">
+                  <Bot className="h-6 w-6" />
+                  <span className="text-xl">生成结果</span>
                 </div>
                 {results.length > 0 && (
-                  <span className="text-sm font-normal text-gray-500">
-                    共生成 {results.length} 条话术
+                  <span className="text-sm font-normal text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                    共 {results.length} 条
                   </span>
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="bg-gray-100 p-4 rounded-md min-h-[200px] border max-h-[400px] overflow-y-auto">
+            <CardContent className="flex-grow flex flex-col gap-4">
+              <div className="bg-slate-100 rounded-lg flex-grow border flex items-center justify-center relative">
                 {isLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-gray-500">AI 正在努力创作中...</p>
+                  <div className="flex flex-col items-center gap-2 text-slate-500">
+                    <Sparkles className="h-8 w-8 animate-pulse" />
+                    <span>AI 正在努力创作中...</span>
                   </div>
                 ) : results.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="absolute inset-0 p-4 overflow-y-auto space-y-3">
                     {results.map((result, index) => (
                       <div
                         key={index}
-                        className="bg-white p-3 rounded-md border shadow-sm"
+                        className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm"
                       >
-                        <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
+                        <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans">
                           {result}
                         </pre>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-gray-500">
-                      生成的话术组合将显示在这里...
-                    </p>
+                  <div className="text-center text-slate-500">
+                    <p>生成的话术组合将显示在这里</p>
                   </div>
                 )}
               </div>
-              <div className="mt-6 text-right">
-                <Button
-                  variant="outline"
-                  disabled={isLoading || results.length === 0}
-                >
-                  导出为 Excel
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full text-base"
+                disabled={isLoading || results.length === 0}
+                onClick={handleExport}
+              >
+                <FileDown className="mr-2 h-4 w-4" />
+                导出为 Excel
+              </Button>
             </CardContent>
           </Card>
-        </main>
+        </div>
       </div>
     </div>
   )
